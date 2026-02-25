@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { ArrowRight, Lightbulb, Building2, Zap, Shield, BarChart3, Globe } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { motion } from "framer-motion";
 
 const fadeUp = {
@@ -62,6 +63,7 @@ const Index = () => {
             <a href="#how-it-works" className="hover:text-foreground transition-colors">How It Works</a>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Button variant="ghost" size="sm" asChild>
               <Link to="/login">Sign In</Link>
             </Button>

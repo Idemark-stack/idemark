@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Zap, Lightbulb, Plus, FileText, LogOut, TrendingUp } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const InnovatorDashboard = () => {
   const navigate = useNavigate();
@@ -42,8 +43,11 @@ const InnovatorDashboard = () => {
           <SidebarLink icon={TrendingUp} label="Insights" />
         </nav>
 
-        <div className="pt-4 border-t border-border">
-          <p className="text-sm text-muted-foreground mb-2 truncate">{user.email}</p>
+        <div className="pt-4 border-t border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+            <ThemeToggle />
+          </div>
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
