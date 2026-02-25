@@ -3,6 +3,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Cached Supabase config for idestrim (avoids re-fetching JS bundle every time)
+let cachedConfig: { url: string; key: string } | null = null;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -18,123 +21,104 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Fetching Idestrim URL:', url);
+    const uuidMatch = url.match(/\/idea\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
 
-    // Fetch the page HTML
-    const response = await fetch(url, {
+    if (!uuidMatch) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid link format. Expected: idestrim.site/idea/[id]' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const postId = uuidMatch[1];
+
+    // Get Supabase config (cached or fresh)
+    if (!cachedConfig) {
+      cachedConfig = await getIdestrimSupabaseConfig();
+    }
+
+    if (!cachedConfig) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Could not connect to Idestrim. Please try again later.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Query the media_uploads table directly
+    const apiUrl = `${cachedConfig.url}/rest/v1/media_uploads?id=eq.${postId}&select=*`;
+    const apiRes = await fetch(apiUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Idemark/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
+        'apikey': cachedConfig.key,
+        'Authorization': `Bearer ${cachedConfig.key}`,
+        'Accept': 'application/json',
       },
     });
 
-    if (!response.ok) {
+    if (!apiRes.ok) {
+      const errText = await apiRes.text();
+      console.error('API error:', errText);
+      // Clear cache in case config is stale
+      cachedConfig = null;
       return new Response(
-        JSON.stringify({ success: false, error: `Failed to fetch the Idestrim post (status ${response.status}).` }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Could not fetch post from Idestrim.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const html = await response.text();
+    const rows = await apiRes.json();
 
-    // Extract Open Graph / meta tags
-    const ogTitle = extractMeta(html, 'og:title') || extractMeta(html, 'twitter:title');
-    const ogDescription = extractMeta(html, 'og:description') || extractMeta(html, 'twitter:description') || extractMeta(html, 'description');
-    const ogImage = extractMeta(html, 'og:image') || extractMeta(html, 'twitter:image');
-
-    // Also try to extract from the HTML body content (for SPAs that render inline)
-    const bodyTitle = extractFromHtml(html, /<h1[^>]*>(.*?)<\/h1>/i) ||
-                      extractFromHtml(html, /<h2[^>]*>(.*?)<\/h2>/i) ||
-                      extractFromHtml(html, /<h3[^>]*>(.*?)<\/h3>/i);
-    
-    const bodyDescription = extractFromHtml(html, /<p[^>]*class="[^"]*description[^"]*"[^>]*>(.*?)<\/p>/i) ||
-                            extractFromHtml(html, /<p[^>]*>(.*?)<\/p>/i);
-
-    // Extract image from body - look for Supabase storage URLs (common for idestrim)
-    const supabaseImageMatch = html.match(/https:\/\/[a-z]+\.supabase\.co\/storage\/v1\/object\/public\/media\/[^\s"'<>]+/i);
-    const bodyImage = supabaseImageMatch ? supabaseImageMatch[0] : null;
-
-    // Extract any tags/categories from the page
-    const tagsMatch = html.match(/(?:category|tag|topic)[^>]*>([^<]+)</gi);
-    const tags: string[] = [];
-    if (tagsMatch) {
-      for (const match of tagsMatch) {
-        const tagText = match.replace(/<[^>]+>/g, '').trim();
-        if (tagText && tagText.length < 50) {
-          tags.push(tagText);
-        }
-      }
-    }
-
-    const title = ogTitle || bodyTitle || '';
-    const description = ogDescription || bodyDescription || '';
-    const image = ogImage || bodyImage || '';
-
-    if (!title && !description && !image) {
+    if (!rows || rows.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Could not extract post data from this link. Make sure it\'s a valid shared post URL from Idestrim.' 
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Post not found. Make sure the link is correct and the post is public.' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Extracted:', { title, description: description?.substring(0, 50), image: image?.substring(0, 50), tags });
+    const post = rows[0];
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          title: cleanHtml(title),
-          description: cleanHtml(description),
-          image,
-          tags,
+          title: post.title || '',
+          description: post.description || post.pitch_summary || '',
+          image: post.media_url || post.thumbnail_url || '',
+          tags: post.category ? [post.category] : [],
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error fetching Idestrim post:', error);
+    console.error('Error:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Failed to import post.' }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Failed to import.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
-function extractMeta(html: string, property: string): string | null {
-  // Try property attribute
-  const propMatch = html.match(new RegExp(`<meta[^>]+property=["']${property}["'][^>]+content=["']([^"']+)["']`, 'i'));
-  if (propMatch) return propMatch[1];
-  
-  // Try name attribute
-  const nameMatch = html.match(new RegExp(`<meta[^>]+name=["']${property}["'][^>]+content=["']([^"']+)["']`, 'i'));
-  if (nameMatch) return nameMatch[1];
+async function getIdestrimSupabaseConfig(): Promise<{ url: string; key: string } | null> {
+  try {
+    const indexRes = await fetch('https://www.idestrim.site/', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Idemark/1.0)' },
+    });
+    const html = await indexRes.text();
 
-  // Try reversed order (content before property)
-  const revMatch = html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${property}["']`, 'i'));
-  if (revMatch) return revMatch[1];
+    // Find JS bundle
+    const scriptMatch = html.match(/src="(\/assets\/[^"]+\.js)"/i);
+    if (!scriptMatch) return null;
 
-  return null;
-}
+    const jsRes = await fetch(`https://www.idestrim.site${scriptMatch[1]}`);
+    const js = await jsRes.text();
 
-function extractFromHtml(html: string, regex: RegExp): string | null {
-  const match = html.match(regex);
-  if (match && match[1]) {
-    return cleanHtml(match[1]);
+    const urlMatch = js.match(/https:\/\/[a-z]+\.supabase\.co/);
+    const keyMatch = js.match(/eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/);
+
+    if (urlMatch && keyMatch) {
+      return { url: urlMatch[0], key: keyMatch[0] };
+    }
+    return null;
+  } catch {
+    return null;
   }
-  return null;
-}
-
-function cleanHtml(text: string): string {
-  return text
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
 }
