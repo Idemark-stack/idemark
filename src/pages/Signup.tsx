@@ -36,8 +36,8 @@ const Signup = () => {
         },
       });
       if (error) throw error;
-      toast({ title: "Check your email", description: "We sent you a confirmation link." });
-      navigate("/login");
+      toast({ title: "Account created!", description: "Welcome to Idemark." });
+      navigate("/dashboard");
     } catch (error: any) {
       toast({ title: "Signup failed", description: error.message, variant: "destructive" });
     } finally {
