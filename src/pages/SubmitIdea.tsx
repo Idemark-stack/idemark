@@ -150,14 +150,14 @@ const SubmitIdea = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto p-8">
-        <Button variant="ghost" className="mb-6 text-muted-foreground" onClick={() => navigate("/dashboard/innovator")}>
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 md:p-8">
+        <Button variant="ghost" className="mb-4 sm:mb-6 text-muted-foreground" onClick={() => navigate("/dashboard/innovator")}>
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Dashboard
         </Button>
 
-        <h1 className="text-3xl font-display font-bold text-foreground mb-2">Submit Your Idea</h1>
-        <p className="text-muted-foreground mb-8">Share your innovation with the world.</p>
+        <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Submit Your Idea</h1>
+        <p className="text-muted-foreground mb-6 sm:mb-8 text-sm sm:text-base">Share your innovation with the world.</p>
 
         <Tabs defaultValue="manual" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-8">
@@ -182,7 +182,7 @@ const SubmitIdea = () => {
                 <Label htmlFor="description">Description / Problem Solved *</Label>
                 <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What problem does your idea solve?" rows={4} required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Industry *</Label>
                   <Select value={industry} onValueChange={setIndustry} required>
@@ -202,7 +202,7 @@ const SubmitIdea = () => {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="funding">Funding Required ($)</Label>
                   <Input id="funding" type="number" value={fundingRequired} onChange={(e) => setFundingRequired(e.target.value)} placeholder="0" />
@@ -267,7 +267,7 @@ const SubmitIdea = () => {
                     <Label htmlFor="imp-desc">Description</Label>
                     <Textarea id="imp-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={4} required />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label>Industry</Label>
                       <Select value={industry} onValueChange={setIndustry}>
@@ -287,7 +287,7 @@ const SubmitIdea = () => {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="imp-funding">Funding Required ($)</Label>
                       <Input id="imp-funding" type="number" value={fundingRequired} onChange={(e) => setFundingRequired(e.target.value)} placeholder="0" />
