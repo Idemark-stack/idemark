@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Zap, Building2, Search, Filter, LogOut, Megaphone, Bookmark, BarChart3 } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const CompanyDashboard = () => {
   const navigate = useNavigate();
@@ -44,9 +45,14 @@ const CompanyDashboard = () => {
           <SidebarLink icon={BarChart3} label="Analytics" />
         </nav>
 
-        <div className="pt-4 border-t border-border">
-          <p className="text-sm font-medium text-foreground truncate">{user.user_metadata?.company_name || "Company"}</p>
-          <p className="text-xs text-muted-foreground mb-2 truncate">{user.email}</p>
+        <div className="pt-4 border-t border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="truncate">
+              <p className="text-sm font-medium text-foreground truncate">{user.user_metadata?.company_name || "Company"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            </div>
+            <ThemeToggle />
+          </div>
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
