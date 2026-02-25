@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import InnovatorDashboard from "./pages/InnovatorDashboard";
+import SubmitIdea from "./pages/SubmitIdea";
 import CompanyDashboard from "./pages/CompanyDashboard";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
           <Route path="/signup" element={<Signup />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/innovator" element={<InnovatorDashboard />} />
+          <Route path="/dashboard/innovator/submit" element={<SubmitIdea />} />
           <Route path="/dashboard/company" element={<CompanyDashboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
