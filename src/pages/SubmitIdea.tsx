@@ -49,6 +49,8 @@ const SubmitIdea = () => {
   // Idestrim import state
   const [idestrimLink, setIdestrimLink] = useState("");
   const [importedData, setImportedData] = useState<any>(null);
+  const [importedImage, setImportedImage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,21 +80,42 @@ const SubmitIdea = () => {
     }
   };
 
-  const handleIdestrimImport = () => {
+  const handleIdestrimImport = async () => {
     if (!idestrimLink.includes("idestrim")) {
-      toast({ title: "Invalid link", description: "Please paste a valid Idestrim link.", variant: "destructive" });
+      toast({ title: "Invalid link", description: "Please paste a valid Idestrim link (idestrim.site).", variant: "destructive" });
       return;
     }
-    // Simulate import — in production this would fetch from Idestrim API
-    setImportedData({
-      title: "Imported Idea from Idestrim",
-      description: "This idea was imported from your Idestrim post.",
-      tags: ["AI", "Healthcare"],
-    });
-    setTitle("Imported Idea from Idestrim");
-    setDescription("This idea was imported from your Idestrim post.");
-    setIndustry("AI / ML");
-    toast({ title: "Imported!", description: "Complete the remaining fields below." });
+    setImporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("fetch-idestrim-post", {
+        body: { url: idestrimLink },
+      });
+
+      if (error || !data?.success) {
+        toast({ title: "Import failed", description: data?.error || error?.message || "Could not fetch post.", variant: "destructive" });
+        return;
+      }
+
+      const post = data.data;
+      setImportedData(post);
+      setTitle(post.title || "");
+      setDescription(post.description || "");
+      setImportedImage(post.image || null);
+
+      // Try to match industry from tags
+      if (post.tags?.length) {
+        const matchedIndustry = INDUSTRIES.find((ind) =>
+          post.tags.some((tag: string) => tag.toLowerCase().includes(ind.toLowerCase()) || ind.toLowerCase().includes(tag.toLowerCase()))
+        );
+        if (matchedIndustry) setIndustry(matchedIndustry);
+      }
+
+      toast({ title: "Imported!", description: "Post data fetched. Complete the remaining fields below." });
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message || "Something went wrong.", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleImportedSubmit = async (e: React.FormEvent) => {
@@ -112,6 +135,7 @@ const SubmitIdea = () => {
         region,
         ip_status: ipStatus,
         idestrim_link: idestrimLink,
+        media_url: importedImage || null,
       });
 
       if (error) throw error;
@@ -213,10 +237,10 @@ const SubmitIdea = () => {
                     id="idestrim-link"
                     value={idestrimLink}
                     onChange={(e) => setIdestrimLink(e.target.value)}
-                    placeholder="https://idestrim.com/post/..."
+                    placeholder="https://idestrim.site/..."
                   />
-                  <Button type="button" onClick={handleIdestrimImport} disabled={!idestrimLink}>
-                    Import
+                  <Button type="button" onClick={handleIdestrimImport} disabled={!idestrimLink || importing}>
+                    {importing ? "Importing…" : "Import"}
                   </Button>
                 </div>
               </div>
@@ -227,6 +251,14 @@ const SubmitIdea = () => {
                     <Link2 className="w-3 h-3" />
                     Imported from Idestrim
                   </div>
+                  {importedImage && (
+                    <div>
+                      <Label>Imported Media</Label>
+                      <div className="mt-2 rounded-lg overflow-hidden border border-border">
+                        <img src={importedImage} alt={title || "Imported media"} className="w-full max-h-64 object-cover" />
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <Label htmlFor="imp-title">Idea Title</Label>
                     <Input id="imp-title" value={title} onChange={(e) => setTitle(e.target.value)} required />
