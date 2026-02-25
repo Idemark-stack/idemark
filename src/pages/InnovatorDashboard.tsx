@@ -38,7 +38,7 @@ const InnovatorDashboard = () => {
 
         <nav className="flex-1 space-y-1">
           <SidebarLink icon={Lightbulb} label="My Ideas" active />
-          <SidebarLink icon={Plus} label="Submit Idea" />
+          <SidebarLink icon={Plus} label="Submit Idea" onClick={() => navigate("/dashboard/innovator/submit")} />
           <SidebarLink icon={TrendingUp} label="Insights" />
         </nav>
 
@@ -82,7 +82,7 @@ const InnovatorDashboard = () => {
           <Lightbulb className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
           <h3 className="text-lg font-display font-semibold text-foreground mb-2">No ideas yet</h3>
           <p className="text-muted-foreground text-sm mb-6">Submit your first idea to start getting matched with companies.</p>
-          <Button>
+          <Button onClick={() => navigate("/dashboard/innovator/submit")}>
             <Plus className="w-4 h-4 mr-2" />
             Submit an Idea
           </Button>
@@ -92,8 +92,9 @@ const InnovatorDashboard = () => {
   );
 };
 
-const SidebarLink = ({ icon: Icon, label, active }: { icon: any; label: string; active?: boolean }) => (
+const SidebarLink = ({ icon: Icon, label, active, onClick }: { icon: any; label: string; active?: boolean; onClick?: () => void }) => (
   <button
+    onClick={onClick}
     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
       active
         ? "bg-primary/10 text-primary font-medium"
