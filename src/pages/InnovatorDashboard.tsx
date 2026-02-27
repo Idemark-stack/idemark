@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Lightbulb, Plus, FileText, LogOut, TrendingUp, Menu, X, Bell, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Zap, Lightbulb, Plus, FileText, LogOut, TrendingUp, Menu, X, Bell, Trash2, MessageCircle, Send } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 
-type ActiveView = "ideas" | "notifications";
+type ActiveView = "ideas" | "notifications" | "messages";
 
 const InnovatorDashboard = () => {
   const navigate = useNavigate();
@@ -19,6 +26,15 @@ const InnovatorDashboard = () => {
   const [ideas, setIdeas] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Messaging
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [chatPartnerName, setChatPartnerName] = useState("");
 
   useEffect(() => {
     const getUser = async () => {
@@ -34,7 +50,29 @@ const InnovatorDashboard = () => {
     if (!user) return;
     fetchIdeas();
     fetchNotifications();
+    fetchConversations();
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('innovator-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const msg = payload.new as any;
+        if (msg.sender_id === user.id || msg.receiver_id === user.id) {
+          fetchConversations();
+          if (activeConversation && (msg.sender_id === activeConversation || msg.receiver_id === activeConversation)) {
+            setChatMessages(prev => [...prev, msg]);
+          }
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, activeConversation]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const fetchIdeas = async () => {
     const { data } = await supabase
@@ -55,6 +93,84 @@ const InnovatorDashboard = () => {
     setUnreadCount((data || []).filter((n: any) => !n.read).length);
   };
 
+  const fetchConversations = async () => {
+    // Get all messages where user is sender or receiver, group by partner
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("*")
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      .order("created_at", { ascending: false });
+
+    if (!msgs || msgs.length === 0) { setConversations([]); return; }
+
+    const partnerMap = new Map<string, any>();
+    for (const m of msgs) {
+      const partnerId = m.sender_id === user.id ? m.receiver_id : m.sender_id;
+      if (!partnerMap.has(partnerId)) {
+        partnerMap.set(partnerId, { partnerId, lastMessage: m, unread: 0 });
+      }
+      if (m.receiver_id === user.id && !m.read) {
+        partnerMap.get(partnerId)!.unread++;
+      }
+    }
+
+    // Fetch partner profiles
+    const partnerIds = Array.from(partnerMap.keys());
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, name, company_name, role")
+      .in("user_id", partnerIds);
+
+    const convs = Array.from(partnerMap.values()).map(c => {
+      const profile = profiles?.find(p => p.user_id === c.partnerId);
+      return { ...c, partnerName: profile?.company_name || profile?.name || "Unknown", partnerRole: profile?.role };
+    });
+
+    setConversations(convs);
+  };
+
+  const openChat = async (partnerId: string, partnerName: string) => {
+    setActiveConversation(partnerId);
+    setChatPartnerName(partnerName);
+
+    const { data } = await supabase
+      .from("messages")
+      .select("*")
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
+      .order("created_at", { ascending: true });
+
+    setChatMessages(data || []);
+
+    // Mark as read
+    await supabase.from("messages").update({ read: true }).eq("sender_id", partnerId).eq("receiver_id", user.id).eq("read", false);
+    fetchConversations();
+  };
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !activeConversation) return;
+    setSendingMessage(true);
+    const { error } = await supabase.from("messages").insert({
+      sender_id: user.id,
+      receiver_id: activeConversation,
+      content: newMessage.trim(),
+    });
+    if (error) {
+      toast({ title: "Failed to send", description: error.message, variant: "destructive" });
+    } else {
+      setNewMessage("");
+    }
+    setSendingMessage(false);
+  };
+
+  const startConversation = async (partnerId: string) => {
+    // Fetch partner profile name
+    const { data: profile } = await supabase.from("profiles").select("name, company_name, role").eq("user_id", partnerId).maybeSingle();
+    const name = profile?.company_name || profile?.name || "Unknown";
+    setActiveView("messages");
+    setSidebarOpen(false);
+    openChat(partnerId, name);
+  };
+
   const markAllRead = async () => {
     await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
     fetchNotifications();
@@ -69,6 +185,8 @@ const InnovatorDashboard = () => {
       fetchIdeas();
     }
   };
+
+  const totalUnreadMessages = conversations.reduce((sum, c) => sum + c.unread, 0);
 
   if (!user) return null;
 
@@ -118,6 +236,13 @@ const InnovatorDashboard = () => {
             badge={unreadCount}
             onClick={() => { setActiveView("notifications"); setSidebarOpen(false); }}
           />
+          <SidebarLink
+            icon={MessageCircle}
+            label="Messages"
+            active={activeView === "messages"}
+            badge={totalUnreadMessages}
+            onClick={() => { setActiveView("messages"); setActiveConversation(null); setSidebarOpen(false); }}
+          />
         </nav>
 
         <div className="pt-4 border-t border-border space-y-2">
@@ -137,10 +262,10 @@ const InnovatorDashboard = () => {
         <div className="mb-6 sm:mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">
-              {activeView === "ideas" ? "My Ideas" : "Notifications"}
+              {activeView === "ideas" ? "My Ideas" : activeView === "notifications" ? "Notifications" : "Messages"}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm sm:text-base">
-              {activeView === "ideas" ? "Track your submitted innovations." : "Updates on your idea matches."}
+              {activeView === "ideas" ? "Track your submitted innovations." : activeView === "notifications" ? "Updates on your idea matches." : "Chat with matched companies."}
             </p>
           </div>
           {activeView === "ideas" && (
@@ -243,14 +368,109 @@ const InnovatorDashboard = () => {
                 <div key={n.id} className={`bg-card border rounded-xl p-4 ${n.read ? "border-border" : "border-primary/50 bg-primary/5"}`}>
                   <div className="flex items-start gap-3">
                     <Bell className={`w-4 h-4 mt-0.5 shrink-0 ${n.read ? "text-muted-foreground" : "text-primary"}`} />
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-medium text-foreground">{n.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
                       <p className="text-xs text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
                     </div>
+                    {n.type === "match" && n.filter_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 text-xs"
+                        onClick={async () => {
+                          // Get the company who owns the filter
+                          const { data: filter } = await supabase.from("company_filters").select("company_id").eq("id", n.filter_id).maybeSingle();
+                          if (filter) startConversation(filter.company_id);
+                        }}
+                      >
+                        <MessageCircle className="w-3 h-3 mr-1" />
+                        Message
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* MESSAGES VIEW */}
+        {activeView === "messages" && (
+          <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-12rem)]">
+            {/* Conversation list */}
+            <div className={`${activeConversation ? "hidden md:block" : ""} w-full md:w-72 shrink-0 bg-card border border-border rounded-xl overflow-hidden`}>
+              <div className="p-3 border-b border-border">
+                <h3 className="font-semibold text-sm text-foreground">Conversations</h3>
+              </div>
+              <div className="divide-y divide-border overflow-y-auto max-h-[calc(100vh-16rem)]">
+                {conversations.length === 0 ? (
+                  <div className="p-6 text-center text-muted-foreground text-sm">
+                    <MessageCircle className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    No conversations yet. Message a matched company from your notifications.
+                  </div>
+                ) : (
+                  conversations.map(c => (
+                    <button
+                      key={c.partnerId}
+                      onClick={() => openChat(c.partnerId, c.partnerName)}
+                      className={`w-full text-left p-3 hover:bg-secondary/50 transition-colors ${activeConversation === c.partnerId ? "bg-primary/10" : ""}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground truncate">{c.partnerName}</span>
+                        {c.unread > 0 && (
+                          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center shrink-0">{c.unread}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{c.lastMessage.content}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Chat area */}
+            {activeConversation ? (
+              <div className="flex-1 bg-card border border-border rounded-xl flex flex-col overflow-hidden">
+                <div className="p-3 border-b border-border flex items-center gap-2">
+                  <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setActiveConversation(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                  <h3 className="font-semibold text-sm text-foreground">{chatPartnerName}</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.sender_id === user.id ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
+                        msg.sender_id === user.id
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-secondary text-secondary-foreground"
+                      }`}>
+                        {msg.content}
+                        <p className={`text-[10px] mt-1 ${msg.sender_id === user.id ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+                <div className="p-3 border-t border-border flex gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={e => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  />
+                  <Button size="icon" onClick={sendMessage} disabled={sendingMessage || !newMessage.trim()}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="hidden md:flex flex-1 bg-card border border-border rounded-xl items-center justify-center">
+                <p className="text-muted-foreground text-sm">Select a conversation</p>
+              </div>
             )}
           </div>
         )}
