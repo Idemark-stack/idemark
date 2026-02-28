@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Lightbulb, Building2, Zap, Shield, BarChart3, Globe, Menu, X } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { motion, AnimatePresence } from "framer-motion";
+import idemarkLogo from "@/assets/idemark-logo.png";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
@@ -56,9 +57,7 @@ const Index = () => {
       <nav className="fixed top-0 left-0 right-0 z-50 glass">
         <div className="container flex items-center justify-between h-14 sm:h-16 px-4 sm:px-6">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="w-4 h-4 text-primary-foreground" />
-            </div>
+            <img src={idemarkLogo} alt="Idemark" className="w-8 h-8 rounded-lg object-cover" />
             <span className="text-lg font-display font-bold text-foreground">Idemark</span>
           </Link>
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
@@ -280,9 +279,7 @@ const Index = () => {
       <footer className="py-8 sm:py-12 bg-card border-t border-border">
         <div className="container px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5 text-primary-foreground" />
-            </div>
+            <img src={idemarkLogo} alt="Idemark" className="w-7 h-7 rounded-lg object-cover" />
             <span className="font-display font-bold text-foreground">Idemark</span>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground text-center">
