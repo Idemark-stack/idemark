@@ -3,8 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Zap, Lightbulb, Building2 } from "lucide-react";
+import { Lightbulb, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import idemarkLogo from "@/assets/idemark-logo.png";
 import { useToast } from "@/hooks/use-toast";
 
 type Role = "innovator" | "company";
@@ -49,9 +50,7 @@ const Signup = () => {
     <div className="min-h-screen bg-hero flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img src={idemarkLogo} alt="Idemark" className="w-8 h-8 rounded-lg object-cover" />
           <span className="text-lg font-display font-bold text-primary-foreground">Idemark</span>
         </Link>
 
